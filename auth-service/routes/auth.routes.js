@@ -14,7 +14,7 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ error: "All fields are required" });
     }
 
-    const passwordHash = await bcreceryypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, 10);
 
     const result = await pool.query(
       `INSERT INTO users (username, email, password_hash)

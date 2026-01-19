@@ -11,7 +11,7 @@ const router = express.Router();
 router.get("/", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, name, latitude, longitude FROM spots ORDER BY created_at DESC"
+      "SELECT id, name, latitude, longitude, spot_type FROM spots ORDER BY created_at DESC"
     );
     res.json(result.rows);
   } catch (err) {

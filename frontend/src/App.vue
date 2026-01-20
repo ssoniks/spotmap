@@ -9,43 +9,41 @@ import SpotForm from './components/SpotForm.vue';
 import AuthModal from './components/AuthModal.vue';
 
 const auth = useAuth();
-// Destructure deleteSpot here
 const { spots, getAllSpots, getSpotDetails, deleteSpot } = useSpots(); 
 
 const selectedSpot = ref(null);
+const spotToEdit = ref(null); // NEW: Track which spot to edit
 const showAddModal = ref(false);
 const showAuthModal = ref(false);
 
 const handleSelectSpot = async (spot) => {
-  // 1. Set summary immediately (so map moves)
   selectedSpot.value = spot;
-
-  // 2. Fetch full details (description, tips, etc.)
   const fullDetails = await getSpotDetails(spot.id);
-  
-  // 3. Update if successful
   if (fullDetails) {
     selectedSpot.value = fullDetails;
   }
 };
 
-// --- NEW: Handle Delete ---
 const handleDelete = async (spot) => {
   if (confirm(`Are you sure you want to delete "${spot.name}"? This cannot be undone.`)) {
     const success = await deleteSpot(spot.id);
     if (success) {
-      selectedSpot.value = null; // Close the popup after deletion
+      selectedSpot.value = null; 
     } else {
       alert("Failed to delete spot.");
     }
   }
 };
 
-// --- NEW: Handle Edit (Placeholder for now) ---
+// --- FIX: Implement Handle Edit ---
 const handleEdit = (spot) => {
-  console.log("Edit requested for:", spot);
-  alert("Edit functionality coming next!");
-  // We will wire this to SpotForm in the next step
+  spotToEdit.value = spot; // Set the spot to edit
+  showAddModal.value = true; // Reuse the same modal
+};
+
+const closeAddModal = () => {
+  showAddModal.value = false;
+  spotToEdit.value = null; // Reset when closing so "Add New" is clean next time
 };
 
 onMounted(async () => {
@@ -76,7 +74,8 @@ onMounted(async () => {
 
     <SpotForm 
       v-if="showAddModal" 
-      @close="showAddModal = false" 
+      :spotToEdit="spotToEdit"
+      @close="closeAddModal" 
     />
     
     <AuthModal 

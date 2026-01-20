@@ -79,5 +79,27 @@ export function useSpots() {
     }
   };
 
-  return { spots, loading, error, getAllSpots, getSpotDetails, createSpot, deleteSpot };
+  const updateSpot = async (id, spotData) => {
+    loading.value = true;
+    error.value = null;
+    try {
+      const payload = {
+        ...spotData,
+        latitude: parseFloat(spotData.latitude),
+        longitude: parseFloat(spotData.longitude)
+      };
+      
+      const res = await spotApi.put(`/spots/${id}`, payload);
+      await getAllSpots(); // Refresh list to show changes
+      return res.data;
+    } catch (err) {
+      console.error(err);
+      error.value = 'Failed to update spot.';
+      return null;
+    } finally {
+      loading.value = false;
+    }
+  };
+
+  return { spots, loading, error, getAllSpots, getSpotDetails, createSpot, deleteSpot, updateSpot };
 }

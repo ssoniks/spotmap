@@ -1,7 +1,7 @@
 <template>
   <div class="modal-backdrop" @click.self="$emit('close')">
     <div class="modal-card">
-      <h2>Add New Spot</h2>
+      <h2>{{ isEditMode ? 'Edit Spot' : 'Add New Spot' }}</h2>
       
       <form @submit.prevent="handleSubmit">
         <label>Spot Name</label>
@@ -32,11 +32,11 @@
         <label>Pro Tips</label>
         <input v-model="form.tips" class="input-field" placeholder="Best time to skate, security, etc." />
 
-        <label>Photo</label>
+        <label>Photo {{ isEditMode ? '(Leave empty to keep current)' : '' }}</label>
         <input type="file" @change="handleFile" class="input-field" accept="image/*" />
 
         <button type="submit" class="btn-primary full-width" :disabled="loading || uploading">
-          {{ uploading ? 'Uploading Image...' : (loading ? 'Creating Spot...' : 'Create Spot') }}
+          {{ uploading ? 'Uploading Image...' : (loading ? 'Saving...' : (isEditMode ? 'Update Spot' : 'Create Spot')) }}
         </button>
       </form>
     </div>
@@ -44,15 +44,20 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue';
+import { reactive, ref, computed, onMounted } from 'vue';
 import { mediaApi, spotApi } from '../services/api';
 import { useSpots } from '../composables/useSpots';
 
+// Accept the spotToEdit prop
+const props = defineProps(['spotToEdit']);
 const emit = defineEmits(['close']);
-const { createSpot, loading } = useSpots();
+
+const { createSpot, updateSpot, loading } = useSpots();
 
 const uploading = ref(false);
 const selectedFile = ref(null);
+
+const isEditMode = computed(() => !!props.spotToEdit);
 
 const form = reactive({
   name: '',
@@ -63,6 +68,18 @@ const form = reactive({
   tips: ''
 });
 
+// Pre-fill form on mount if editing
+onMounted(() => {
+  if (isEditMode.value) {
+    form.name = props.spotToEdit.name;
+    form.latitude = props.spotToEdit.latitude;
+    form.longitude = props.spotToEdit.longitude;
+    form.spot_type = props.spotToEdit.spot_type;
+    form.description = props.spotToEdit.description;
+    form.tips = props.spotToEdit.tips;
+  }
+});
+
 const handleFile = (e) => {
   selectedFile.value = e.target.files[0];
 };
@@ -70,55 +87,76 @@ const handleFile = (e) => {
 const handleSubmit = async () => {
   if (loading.value || uploading.value) return;
 
-  // 1. Create the Spot
-  console.log("Step 1: Creating Spot...");
-  const newSpot = await createSpot(form);
+  if (isEditMode.value) {
+    // --- EDIT MODE ---
+    let finalImageUrl = props.spotToEdit.image_url;
 
-  if (!newSpot) {
-    alert("Error creating spot. Please try again.");
-    return;
-  }
-  console.log("Step 1 Success: Spot Created with ID:", newSpot.id);
+    // 1. Upload NEW image if selected
+    if (selectedFile.value) {
+      uploading.value = true;
+      try {
+        const formData = new FormData();
+        formData.append('image', selectedFile.value);
+        formData.append('spotId', props.spotToEdit.id);
 
-  // 2. Upload Image
-  if (selectedFile.value && newSpot.id) { 
-    uploading.value = true;
-    try {
-      console.log("Step 2: Uploading Image...");
-      const formData = new FormData();
-      formData.append('image', selectedFile.value);
-      formData.append('spotId', newSpot.id);
-
-      const mediaRes = await mediaApi.post('/media/upload', formData);
-      
-      // LOG: Check what the Media Service actually returned
-      console.log("Step 2 Success: Media API Response:", mediaRes.data);
-      
-      const imageUrl = mediaRes.data.url; 
-
-      // 3. Update Spot Service with URL
-      if (imageUrl) {
-        console.log("Step 3: Updating Spot with Image URL:", imageUrl);
-        
-        await spotApi.put(`/spots/${newSpot.id}`, { 
-           ...newSpot, 
-           image_url: imageUrl 
-        });
-        
-        console.log("Step 3 Success: Spot Updated!");
-      } else {
-        console.warn("Step 3 Skipped: No image URL found in Media Response.");
+        const mediaRes = await mediaApi.post('/media/upload', formData);
+        finalImageUrl = mediaRes.data.url;
+      } catch (err) {
+        console.error("Image upload failed", err);
+        alert("Failed to upload new image");
+        uploading.value = false;
+        return;
+      } finally {
+        uploading.value = false;
       }
-      
-    } catch (err) {
-      console.error("Image upload failed", err);
-      alert("Spot created, but image upload failed.");
-    } finally {
-      uploading.value = false;
     }
-  }
 
-  emit('close');
+    // 2. Update Spot Data
+    const updated = await updateSpot(props.spotToEdit.id, {
+      ...form,
+      image_url: finalImageUrl
+    });
+
+    if (updated) {
+      emit('close');
+    } else {
+      alert("Failed to update spot");
+    }
+
+  } else {
+    // --- CREATE MODE (Existing Logic) ---
+    const newSpot = await createSpot(form);
+
+    if (!newSpot) {
+      alert("Error creating spot. Please try again.");
+      return;
+    }
+
+    if (selectedFile.value && newSpot.id) { 
+      uploading.value = true;
+      try {
+        const formData = new FormData();
+        formData.append('image', selectedFile.value);
+        formData.append('spotId', newSpot.id);
+
+        const mediaRes = await mediaApi.post('/media/upload', formData);
+        const imageUrl = mediaRes.data.url; 
+
+        if (imageUrl) {
+          await spotApi.put(`/spots/${newSpot.id}`, { 
+             ...newSpot, 
+             image_url: imageUrl 
+          });
+        }
+      } catch (err) {
+        console.error("Image upload failed", err);
+        alert("Spot created, but image upload failed.");
+      } finally {
+        uploading.value = false;
+      }
+    }
+    emit('close');
+  }
 };
 </script>
 

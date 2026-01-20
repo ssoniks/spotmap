@@ -1,8 +1,8 @@
 <script setup>
-import { ref, watch, computed } from 'vue'; // Added computed
-import { LMap, LTileLayer, LMarker } from "@vue-leaflet/vue-leaflet"; // Removed LPopup (unused)
+import { ref, watch, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { LMap, LTileLayer, LMarker } from "@vue-leaflet/vue-leaflet"; 
 import "leaflet/dist/leaflet.css";
-import { useAuth } from '../composables/useAuth'; // Import Auth
+import { useAuth } from '../composables/useAuth';
 
 // Leaflet Icon Fixes
 import L from 'leaflet';
@@ -18,13 +18,17 @@ L.Icon.Default.mergeOptions({
 });
 
 const props = defineProps(['spots', 'selectedSpot']);
-const emit = defineEmits(['marker-click', 'close-details', 'edit-spot', 'delete-spot']); // Added emits
+const emit = defineEmits(['marker-click', 'close-details', 'edit-spot', 'delete-spot']);
 
-const auth = useAuth(); // Init Auth
+const auth = useAuth();
 const zoom = ref(13);
 const center = ref([42.6977, 23.3219]);
 
-// Check if current user created this spot
+// Refs for Map resizing logic
+const map = ref(null);
+const mapContainer = ref(null);
+let resizeObserver = null;
+
 const isOwner = computed(() => {
   if (!props.selectedSpot || !auth.user.value) return false;
   return props.selectedSpot.created_by === auth.user.value.id;
@@ -36,15 +40,33 @@ watch(() => props.selectedSpot, (newSpot) => {
     zoom.value = 16;
   }
 });
+
+// --- FIX: Resize Observer to update Leaflet when Sidebar toggles ---
+onMounted(() => {
+  if (mapContainer.value) {
+    resizeObserver = new ResizeObserver(() => {
+      // Force Leaflet to check its container size
+      if (map.value && map.value.leafletObject) {
+        map.value.leafletObject.invalidateSize();
+      }
+    });
+    resizeObserver.observe(mapContainer.value);
+  }
+});
+
+onBeforeUnmount(() => {
+  if (resizeObserver) resizeObserver.disconnect();
+});
 </script>
 
 <template>
-  <div class="map-wrapper">
+  <div class="map-wrapper" ref="mapContainer">
     <LMap 
       ref="map"
       v-model:zoom="zoom" 
       v-model:center="center" 
       :use-global-leaflet="false"
+      :options="{ zoomControl: false }" 
     >
       <LTileLayer
         url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -86,7 +108,14 @@ watch(() => props.selectedSpot, (newSpot) => {
 </template>
 
 <style scoped>
-.map-wrapper { height: 100vh; width: 100%; position: relative; }
+/* FIX: Set background color to match app theme so glitches aren't white */
+.map-wrapper { 
+  height: 100vh; 
+  width: 100%; 
+  position: relative; 
+  background-color: #121212; /* Matches var(--bg-dark) */
+  z-index: 0;
+}
 
 .map-overlay {
   position: absolute;
@@ -108,7 +137,6 @@ watch(() => props.selectedSpot, (newSpot) => {
 .spot-image img { width: 100%; border-radius: 6px; margin-top: 10px; }
 .meta { margin-top: 10px; font-size: 0.9rem; color: #ccc; }
 
-/* Owner Actions Styling */
 .owner-actions {
   display: flex;
   gap: 10px;
@@ -125,22 +153,11 @@ watch(() => props.selectedSpot, (newSpot) => {
   font-size: 0.85rem;
 }
 
-.btn-edit {
-  background: #333;
-  color: white;
-  border: 1px solid #555;
-}
+.btn-edit { background: #333; color: white; border: 1px solid #555; }
 .btn-edit:hover { background: #444; }
 
-.btn-delete {
-  background: rgba(255, 77, 77, 0.1);
-  color: var(--danger);
-  border: 1px solid transparent;
-}
-.btn-delete:hover {
-  background: var(--danger);
-  color: white;
-}
+.btn-delete { background: rgba(255, 77, 77, 0.1); color: var(--danger); border: 1px solid transparent; }
+.btn-delete:hover { background: var(--danger); color: white; }
 
 @media (max-width: 768px) {
   .map-overlay { bottom: 0; right: 0; left: 0; width: auto; border-radius: 12px 12px 0 0; }

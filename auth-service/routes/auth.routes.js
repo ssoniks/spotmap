@@ -88,11 +88,25 @@ router.post("/login", async (req, res) => {
 });
 
 router.get("/me", authMiddleware, async (req, res) => {
+  try {
+    // FIX: Fetch the full user details from the DB using the ID from the token
+    const result = await pool.query(
+      "SELECT id, username, email FROM users WHERE id = $1", 
+      [req.user.userId] // 'userId' comes from the decoded token in middleware
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
     res.json({
       message: "You are authenticated",
-      user: req.user,
+      user: result.rows[0], 
     });
-  });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 
 module.exports = router;

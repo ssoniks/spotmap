@@ -11,7 +11,7 @@ const router = express.Router();
 router.get("/", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, name, latitude, longitude, spot_type FROM spots ORDER BY created_at DESC"
+      "SELECT id, name, latitude, longitude, spot_type, image_url FROM spots ORDER BY created_at DESC"
     );
     res.json(result.rows);
   } catch (err) {
@@ -27,16 +27,15 @@ router.get("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(`[Spot Service] GET /${id} requested`); // <--- LOG
 
-    const result = await pool.query(
-      "SELECT * FROM spots WHERE id = $1",
-      [id]
-    );
+    const result = await pool.query("SELECT * FROM spots WHERE id = $1", [id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Spot not found" });
     }
 
+    console.log(`[Spot Service] Returning spot:`, result.rows[0]); // <--- LOG
     res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -59,6 +58,7 @@ router.post("/", authMiddleware, async (req, res) => {
         longitude,
         spot_type,
         tips,
+        image_url // <--- ADD THIS
       } = req.body;
   
       if (!name || !description || !latitude || !longitude || !spot_type) {
@@ -69,10 +69,10 @@ router.post("/", authMiddleware, async (req, res) => {
   
       const result = await pool.query(
         `INSERT INTO spots
-         (name, description, latitude, longitude, spot_type, tips, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         (name, description, latitude, longitude, spot_type, tips, created_by, image_url)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
-        [name, description, latitude, longitude, spot_type, tips, userId]
+        [name, description, latitude, longitude, spot_type, tips, userId, image_url]
       );
   
       res.status(201).json(result.rows[0]);
@@ -89,8 +89,9 @@ router.post("/", authMiddleware, async (req, res) => {
 router.put("/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(`[Spot Service] PUT /${id} called with body:`, req.body);
     const userId = req.user.userId;
-    const { name, description, latitude, longitude, spot_type, tips } = req.body;
+    const { name, description, latitude, longitude, spot_type, tips, image_url } = req.body;
 
     // Check if spot exists and was created by this user
     const check = await pool.query("SELECT * FROM spots WHERE id = $1", [id]);
@@ -104,10 +105,11 @@ router.put("/:id", authMiddleware, async (req, res) => {
     // Update spot
     const result = await pool.query(
       `UPDATE spots
-       SET name=$1, description=$2, latitude=$3, longitude=$4, spot_type=$5, tips=$6
-       WHERE id=$7
+       SET name=$1, description=$2, latitude=$3, longitude=$4, spot_type=$5, tips=$6,
+           image_url=COALESCE($7, image_url)
+       WHERE id=$8
        RETURNING *`,
-      [name, description, latitude, longitude, spot_type, tips, id]
+      [name, description, latitude, longitude, spot_type, tips, image_url, id]
     );
 
     res.json(result.rows[0]);

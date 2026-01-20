@@ -12,7 +12,7 @@ const upload = multer({ storage: multer.memoryStorage() });
  * POST /upload
  * Protected - upload image for a spot
  */
-router.post("/upload", authMiddleware, upload.single("file"), async (req, res) => {
+router.post("/upload", authMiddleware, upload.single("image"), async (req, res) => {
   try {
     const { spotId } = req.body;
     const file = req.file;
@@ -30,8 +30,12 @@ router.post("/upload", authMiddleware, upload.single("file"), async (req, res) =
           "INSERT INTO media (spot_id, image_url) VALUES ($1, $2) RETURNING *",
           [spotId, result.secure_url]
         );
-
-        res.status(201).json(dbResult.rows[0]);
+        
+        // MODIFY RESPONSE to explicitly include 'url' or just return the whole object
+        res.status(201).json({
+            ...dbResult.rows[0],
+            url: result.secure_url // <--- Explicitly sending the URL for the frontend to use
+        });
       }
     );
 

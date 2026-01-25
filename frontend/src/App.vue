@@ -12,11 +12,16 @@ const auth = useAuth();
 const { spots, getAllSpots, getSpotDetails, deleteSpot } = useSpots(); 
 
 const selectedSpot = ref(null);
-const spotToEdit = ref(null); // NEW: Track which spot to edit
+const spotToEdit = ref(null);
 const showAddModal = ref(false);
 const showAuthModal = ref(false);
 
+// New State for Location Picking
+const isPickingLocation = ref(false);
+const newSpotLocation = ref(null);
+
 const handleSelectSpot = async (spot) => {
+  if (isPickingLocation.value) return; // Don't select spots while picking location
   selectedSpot.value = spot;
   const fullDetails = await getSpotDetails(spot.id);
   if (fullDetails) {
@@ -35,15 +40,35 @@ const handleDelete = async (spot) => {
   }
 };
 
-// --- FIX: Implement Handle Edit ---
 const handleEdit = (spot) => {
-  spotToEdit.value = spot; // Set the spot to edit
-  showAddModal.value = true; // Reuse the same modal
+  spotToEdit.value = spot;
+  showAddModal.value = true;
+};
+
+// --- NEW FLOW: Add Spot ---
+const startAddSpot = () => {
+  // 1. Enter Picking Mode
+  isPickingLocation.value = true;
+  selectedSpot.value = null; // Close any open details
+};
+
+const handleMapClick = (latlng) => {
+  if (isPickingLocation.value) {
+    // 2. Capture Location & Open Form
+    newSpotLocation.value = latlng;
+    isPickingLocation.value = false; // Exit mode
+    showAddModal.value = true;
+  }
+};
+
+const cancelPick = () => {
+  isPickingLocation.value = false;
 };
 
 const closeAddModal = () => {
   showAddModal.value = false;
-  spotToEdit.value = null; // Reset when closing so "Add New" is clean next time
+  spotToEdit.value = null;
+  newSpotLocation.value = null;
 };
 
 onMounted(async () => {
@@ -57,15 +82,22 @@ onMounted(async () => {
     <SpotSidebar 
       :spots="spots" 
       @select-spot="handleSelectSpot"
-      @open-add="showAddModal = true"
+      @open-add="startAddSpot"
       @open-auth="showAuthModal = true"
     />
     
     <main class="map-section">
+      <div v-if="isPickingLocation" class="pick-banner">
+        <span>📍 Click on the map to set the spot location</span>
+        <button @click="cancelPick">Cancel</button>
+      </div>
+
       <SpotMap 
         :spots="spots" 
         :selectedSpot="selectedSpot"
-        @marker-click="handleSelectSpot" 
+        :isPickingLocation="isPickingLocation"
+        @marker-click="handleSelectSpot"
+        @map-click="handleMapClick" 
         @close-details="selectedSpot = null"
         @delete-spot="handleDelete"
         @edit-spot="handleEdit"
@@ -75,6 +107,7 @@ onMounted(async () => {
     <SpotForm 
       v-if="showAddModal" 
       :spotToEdit="spotToEdit"
+      :initialLocation="newSpotLocation"
       @close="closeAddModal" 
     />
     
@@ -97,5 +130,31 @@ onMounted(async () => {
   flex-grow: 1;
   position: relative;
   z-index: 1;
+}
+
+/* New Banner Style */
+.pick-banner {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--accent);
+  color: black;
+  padding: 12px 24px;
+  border-radius: 30px;
+  font-weight: bold;
+  z-index: 2000;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
+.pick-banner button {
+  background: black;
+  color: white;
+  padding: 5px 12px;
+  border-radius: 15px;
+  font-size: 0.8rem;
 }
 </style>

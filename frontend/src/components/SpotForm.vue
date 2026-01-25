@@ -7,17 +7,6 @@
         <label>Spot Name</label>
         <input v-model="form.name" required class="input-field" placeholder="e.g. Plaza Ledge" />
 
-        <div class="row">
-          <div class="col">
-            <label>Lat</label>
-            <input v-model="form.latitude" required type="number" step="any" class="input-field" />
-          </div>
-          <div class="col">
-            <label>Lng</label>
-            <input v-model="form.longitude" required type="number" step="any" class="input-field" />
-          </div>
-        </div>
-
         <label>Type</label>
         <select v-model="form.spot_type" class="input-field">
           <option>Street</option>
@@ -44,16 +33,16 @@
 </template>
 
 <script setup>
+// ... (Keep existing script) ...
 import { reactive, ref, computed, onMounted } from 'vue';
 import { mediaApi, spotApi } from '../services/api';
 import { useSpots } from '../composables/useSpots';
 
-// Accept the spotToEdit prop
-const props = defineProps(['spotToEdit']);
+// Added initialLocation prop
+const props = defineProps(['spotToEdit', 'initialLocation']);
 const emit = defineEmits(['close']);
 
 const { createSpot, updateSpot, loading } = useSpots();
-
 const uploading = ref(false);
 const selectedFile = ref(null);
 
@@ -68,15 +57,20 @@ const form = reactive({
   tips: ''
 });
 
-// Pre-fill form on mount if editing
+// Pre-fill form
 onMounted(() => {
   if (isEditMode.value) {
+    // Edit Mode: Fill from existing spot
     form.name = props.spotToEdit.name;
     form.latitude = props.spotToEdit.latitude;
     form.longitude = props.spotToEdit.longitude;
     form.spot_type = props.spotToEdit.spot_type;
     form.description = props.spotToEdit.description;
     form.tips = props.spotToEdit.tips;
+  } else if (props.initialLocation) {
+    // Add Mode: Fill from Map Click
+    form.latitude = props.initialLocation.lat;
+    form.longitude = props.initialLocation.lng;
   }
 });
 
@@ -88,17 +82,14 @@ const handleSubmit = async () => {
   if (loading.value || uploading.value) return;
 
   if (isEditMode.value) {
-    // --- EDIT MODE ---
+    // ... (Keep existing Edit logic exactly as it is) ...
     let finalImageUrl = props.spotToEdit.image_url;
-
-    // 1. Upload NEW image if selected
     if (selectedFile.value) {
       uploading.value = true;
       try {
         const formData = new FormData();
         formData.append('image', selectedFile.value);
         formData.append('spotId', props.spotToEdit.id);
-
         const mediaRes = await mediaApi.post('/media/upload', formData);
         finalImageUrl = mediaRes.data.url;
       } catch (err) {
@@ -110,43 +101,27 @@ const handleSubmit = async () => {
         uploading.value = false;
       }
     }
-
-    // 2. Update Spot Data
-    const updated = await updateSpot(props.spotToEdit.id, {
-      ...form,
-      image_url: finalImageUrl
-    });
-
-    if (updated) {
-      emit('close');
-    } else {
-      alert("Failed to update spot");
-    }
+    const updated = await updateSpot(props.spotToEdit.id, { ...form, image_url: finalImageUrl });
+    if (updated) emit('close');
+    else alert("Failed to update spot");
 
   } else {
-    // --- CREATE MODE (Existing Logic) ---
+    // ... (Keep existing Create logic exactly as it is) ...
     const newSpot = await createSpot(form);
-
     if (!newSpot) {
       alert("Error creating spot. Please try again.");
       return;
     }
-
     if (selectedFile.value && newSpot.id) { 
       uploading.value = true;
       try {
         const formData = new FormData();
         formData.append('image', selectedFile.value);
         formData.append('spotId', newSpot.id);
-
         const mediaRes = await mediaApi.post('/media/upload', formData);
         const imageUrl = mediaRes.data.url; 
-
         if (imageUrl) {
-          await spotApi.put(`/spots/${newSpot.id}`, { 
-             ...newSpot, 
-             image_url: imageUrl 
-          });
+          await spotApi.put(`/spots/${newSpot.id}`, { ...newSpot, image_url: imageUrl });
         }
       } catch (err) {
         console.error("Image upload failed", err);
@@ -162,15 +137,8 @@ const handleSubmit = async () => {
 
 <style scoped>
 /* Same styles as before */
-.modal-backdrop {
-  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0,0,0,0.8); z-index: 2000;
-  display: flex; align-items: center; justify-content: center;
-}
-.modal-card {
-  background: var(--bg-card); padding: 30px; border-radius: 12px;
-  width: 90%; max-width: 400px; border: 1px solid #444;
-}
+.modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; display: flex; align-items: center; justify-content: center; }
+.modal-card { background: var(--bg-card); padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; border: 1px solid #444; }
 .row { display: flex; gap: 10px; }
 .col { flex: 1; }
 h2 { margin-bottom: 20px; color: var(--accent); }

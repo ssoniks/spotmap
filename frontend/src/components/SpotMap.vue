@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue';
 import { LMap, LTileLayer, LMarker } from "@vue-leaflet/vue-leaflet"; 
 import "leaflet/dist/leaflet.css";
 import { useAuth } from '../composables/useAuth';
@@ -17,14 +17,19 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-const props = defineProps(['spots', 'selectedSpot']);
-const emit = defineEmits(['marker-click', 'close-details', 'edit-spot', 'delete-spot']);
+// Added 'isPickingLocation' prop
+const props = defineProps(['spots', 'selectedSpot', 'isPickingLocation']);
+const emit = defineEmits(['marker-click', 'map-click', 'close-details', 'edit-spot', 'delete-spot']); // Added 'map-click'
 
 const auth = useAuth();
 const zoom = ref(13);
-const center = ref([42.6977, 23.3219]);
+const center = ref([42.6977, 23.3219]); 
 
-// Refs for Map resizing logic
+const bulgariaBounds = [
+  [41.235, 22.357], 
+  [44.215, 28.609]  
+];
+
 const map = ref(null);
 const mapContainer = ref(null);
 let resizeObserver = null;
@@ -41,11 +46,15 @@ watch(() => props.selectedSpot, (newSpot) => {
   }
 });
 
-// --- FIX: Resize Observer to update Leaflet when Sidebar toggles ---
+// --- Handle Map Click ---
+const onMapClick = (e) => {
+  // e.latlng contains { lat, lng }
+  emit('map-click', e.latlng);
+};
+
 onMounted(() => {
   if (mapContainer.value) {
     resizeObserver = new ResizeObserver(() => {
-      // Force Leaflet to check its container size
       if (map.value && map.value.leafletObject) {
         map.value.leafletObject.invalidateSize();
       }
@@ -60,13 +69,17 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="map-wrapper" ref="mapContainer">
+  <div class="map-wrapper" ref="mapContainer" :class="{ 'picking-mode': isPickingLocation }">
     <LMap 
       ref="map"
       v-model:zoom="zoom" 
       v-model:center="center" 
       :use-global-leaflet="false"
-      :options="{ zoomControl: false }" 
+      :options="{ zoomControl: false }"
+      :max-bounds="bulgariaBounds" 
+      :min-zoom="7"
+      :max-bounds-viscosity="1.0"
+      @click="onMapClick"
     >
       <LTileLayer
         url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -101,20 +114,27 @@ onBeforeUnmount(() => {
           <button class="btn-edit" @click="$emit('edit-spot', selectedSpot)">Edit</button>
           <button class="btn-delete" @click="$emit('delete-spot', selectedSpot)">Delete</button>
         </div>
-
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* FIX: Set background color to match app theme so glitches aren't white */
 .map-wrapper { 
   height: 100vh; 
   width: 100%; 
   position: relative; 
-  background-color: #121212; /* Matches var(--bg-dark) */
+  background-color: #121212; 
   z-index: 0;
+}
+
+
+
+.picking-mode,
+.picking-mode :deep(.leaflet-container),
+.picking-mode :deep(.leaflet-interactive) {
+  /* This is a Data URI for a Red Pin. No external file needed. */
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="%23ff3333" stroke="%23000000" stroke-width="1"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5" fill="%23b30000"/></svg>') 16 32, crosshair !important;
 }
 
 .map-overlay {
@@ -132,30 +152,16 @@ onBeforeUnmount(() => {
   color: white;
 }
 
+/* ... Rest of your styles remain exactly the same ... */
 .close-btn { position: absolute; top: 10px; right: 10px; background: transparent; color: #aaa; font-size: 1.2rem; }
 .badge { background: var(--accent); color: black; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase; }
 .spot-image img { width: 100%; border-radius: 6px; margin-top: 10px; }
 .meta { margin-top: 10px; font-size: 0.9rem; color: #ccc; }
 
-.owner-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 1px solid #444;
-}
-
-.btn-edit, .btn-delete {
-  flex: 1;
-  padding: 8px;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 0.85rem;
-}
-
+.owner-actions { display: flex; gap: 10px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #444; }
+.btn-edit, .btn-delete { flex: 1; padding: 8px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; }
 .btn-edit { background: #333; color: white; border: 1px solid #555; }
 .btn-edit:hover { background: #444; }
-
 .btn-delete { background: rgba(255, 77, 77, 0.1); color: var(--danger); border: 1px solid transparent; }
 .btn-delete:hover { background: var(--danger); color: white; }
 

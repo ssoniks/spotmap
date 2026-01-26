@@ -1,6 +1,7 @@
 const express = require("express");
 const pool = require("../db");
 const authMiddleware = require("../middleware/auth.middleware");
+const axios = require("axios");
 
 const router = express.Router();
 
@@ -11,7 +12,7 @@ const router = express.Router();
 router.get("/", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, name, latitude, longitude, spot_type, image_url FROM spots ORDER BY created_at DESC"
+      "SELECT id, name, latitude, longitude, spot_type, image_url, created_by, creator_username FROM spots ORDER BY created_at DESC"
     );
     res.json(result.rows);
   } catch (err) {
@@ -47,40 +48,68 @@ module.exports = router;
 
 /**
  * POST /spots
- * Protected - add new spot
+ * Protected - add new spot + REWARD POINTS
  */
 router.post("/", authMiddleware, async (req, res) => {
-    try {
-      const {
-        name,
-        description,
-        latitude,
-        longitude,
-        spot_type,
-        tips,
-        image_url // <--- ADD THIS
-      } = req.body;
-  
-      if (!name || !description || !latitude || !longitude || !spot_type) {
-        return res.status(400).json({ error: "Missing required fields" });
-      }
-  
-      const userId = req.user.userId;
-  
-      const result = await pool.query(
-        `INSERT INTO spots
-         (name, description, latitude, longitude, spot_type, tips, created_by, image_url)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         RETURNING *`,
-        [name, description, latitude, longitude, spot_type, tips, userId, image_url]
-      );
-  
-      res.status(201).json(result.rows[0]);
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: "Failed to create spot" });
+  try {
+    console.log("--- DEBUG: POST /spots called ---");
+    console.log("Request Body:", req.body); // <--- CHECK THIS LOG
+
+    const {
+      name,
+      description,
+      latitude,
+      longitude,
+      spot_type,
+      tips,
+      image_url,
+      creator_username
+    } = req.body;
+
+    console.log("Extracted Username:", creator_username);
+
+    if (!name || !description || !latitude || !longitude || !spot_type) {
+      return res.status(400).json({ error: "Missing required fields" });
     }
-  });
+
+    const userId = req.user.userId;
+
+    // 1. Create the Spot
+    const result = await pool.query(
+      `INSERT INTO spots
+       (name, description, latitude, longitude, spot_type, tips, created_by, image_url, creator_username)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING *`,
+      [name, description, latitude, longitude, spot_type, tips, userId, image_url, creator_username]
+    );
+
+    const newSpot = result.rows[0];
+
+    // 2. GAMIFICATION: Reward the user (+50 Points)
+    // We do this *after* the spot is created successfully.
+    try {
+      // Assume Auth Service is running on localhost:4000 (adjust port if needed)
+      const authServiceUrl = "http://localhost:4001/auth/add-points";
+      
+      await axios.put(authServiceUrl, {
+        userId: userId,
+        amount: 50 // Points for creating a spot
+      });
+
+      console.log(`[Gamification] Awarded 50 points to user ${userId}`);
+    } catch (rewardErr) {
+      // If the reward fails, we log it but DON'T fail the request. 
+      // The spot was created, so we return success to the user.
+      console.error("[Gamification] Failed to award points:", rewardErr.message);
+    }
+
+    res.status(201).json(newSpot);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to create spot" });
+  }
+});
   
 /**
  * PUT /spots/:id

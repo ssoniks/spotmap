@@ -6,6 +6,13 @@ const authMiddleware = require("../middleware/auth.middleware");
 
 const router = express.Router();
 
+const getStatus = (points) => {
+  if (points >= 1000) return "Legend";
+  if (points >= 500) return "Hero";
+  if (points >= 100) return "Local";
+  return "Beginner";
+};
+
 router.post("/register", async (req, res) => {
   try {
     const { username, email, password } = req.body;
@@ -37,6 +44,8 @@ router.post("/register", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
+// auth-service/routes/auth.routes.js
 
 router.post("/login", async (req, res) => {
   try {
@@ -79,7 +88,10 @@ router.post("/login", async (req, res) => {
         id: user.id,
         username: user.username,
         email: user.email,
+        points: user.points || 0,       
+        status: getStatus(user.points || 0) 
       },
+
     });
   } catch (err) {
     console.error(err);
@@ -89,18 +101,23 @@ router.post("/login", async (req, res) => {
 
 router.get("/me", authMiddleware, async (req, res) => {
   try {
-    // FIX: Fetch the full user details from the DB using the ID from the token
     const result = await pool.query(
-      "SELECT id, username, email FROM users WHERE id = $1", 
-      [req.user.userId] // 'userId' comes from the decoded token in middleware
+      "SELECT id, username, email, points FROM users WHERE id = $1", 
+      [req.user.userId]
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "User not found" });
     }
+
+    const user = result.rows[0];
+
     res.json({
       message: "You are authenticated",
-      user: result.rows[0], 
+      user: {
+        ...user,
+        status: getStatus(user.points || 0) 
+      }
     });
   } catch (err) {
     console.error(err);
@@ -108,5 +125,53 @@ router.get("/me", authMiddleware, async (req, res) => {
   }
 });
 
+router.put("/add-points", async (req, res) => {
+  try {
+    const { userId, amount } = req.body;
+    
+    // FIX: Use COALESCE(points, 0) to handle NULL values safely
+    const result = await pool.query(
+      "UPDATE users SET points = COALESCE(points, 0) + $1 WHERE id = $2 RETURNING id, username, points",
+      [amount, userId]
+    );
 
+    if (result.rows.length === 0) return res.status(404).json({ error: "User not found" });
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to update points" });
+  }
+});
+
+/**
+ * GET /users/:username
+ * Public - Get public profile (Status only, no Points)
+ */
+router.get("/users/:username", async (req, res) => {
+  try {
+    const { username } = req.params;
+    
+    // We fetch points to calculate status, but we won't return them
+    const result = await pool.query(
+      "SELECT username, points FROM users WHERE username = $1", 
+      [username]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const user = result.rows[0];
+
+    res.json({
+      username: user.username,
+      status: getStatus(user.points || 0) 
+      // Note: We intentionally do NOT return 'points' here
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 module.exports = router;

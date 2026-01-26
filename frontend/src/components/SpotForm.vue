@@ -9,10 +9,15 @@
 
         <label>Type</label>
         <select v-model="form.spot_type" class="input-field">
-          <option>Street</option>
+          <option>Ledge</option>
           <option>Park</option>
+          <option>Rail</option>
           <option>DIY</option>
           <option>Stairs</option>
+          <option>Polejam</option>
+          <option>Gap</option>
+          <option>Slappy</option>
+          <option>Custom</option>
         </select>
 
         <label>Description</label>
@@ -33,16 +38,16 @@
 </template>
 
 <script setup>
-// ... (Keep existing script) ...
 import { reactive, ref, computed, onMounted } from 'vue';
 import { mediaApi, spotApi } from '../services/api';
 import { useSpots } from '../composables/useSpots';
+import { useAuth } from '../composables/useAuth'; // <--- 1. Import Auth
 
-// Added initialLocation prop
 const props = defineProps(['spotToEdit', 'initialLocation']);
 const emit = defineEmits(['close']);
 
 const { createSpot, updateSpot, loading } = useSpots();
+const auth = useAuth(); // <--- 2. Initialize Auth
 const uploading = ref(false);
 const selectedFile = ref(null);
 
@@ -82,7 +87,7 @@ const handleSubmit = async () => {
   if (loading.value || uploading.value) return;
 
   if (isEditMode.value) {
-    // ... (Keep existing Edit logic exactly as it is) ...
+    // --- EDIT MODE (Unchanged) ---
     let finalImageUrl = props.spotToEdit.image_url;
     if (selectedFile.value) {
       uploading.value = true;
@@ -106,12 +111,21 @@ const handleSubmit = async () => {
     else alert("Failed to update spot");
 
   } else {
-    // ... (Keep existing Create logic exactly as it is) ...
-    const newSpot = await createSpot(form);
+    // --- CREATE MODE (Updated) ---
+    
+    // 3. Prepare payload with invisible username
+    const payload = {
+      ...form,
+      creator_username: auth.user.value?.username || 'Skater'
+    };
+
+    const newSpot = await createSpot(payload);
+    
     if (!newSpot) {
       alert("Error creating spot. Please try again.");
       return;
     }
+    
     if (selectedFile.value && newSpot.id) { 
       uploading.value = true;
       try {
@@ -130,13 +144,14 @@ const handleSubmit = async () => {
         uploading.value = false;
       }
     }
+    await auth.checkAuth(); 
+
     emit('close');
   }
 };
 </script>
 
 <style scoped>
-/* Same styles as before */
 .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; display: flex; align-items: center; justify-content: center; }
 .modal-card { background: var(--bg-card); padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; border: 1px solid #444; }
 .row { display: flex; gap: 10px; }

@@ -19,7 +19,7 @@ L.Icon.Default.mergeOptions({
 
 // Added 'isPickingLocation' prop
 const props = defineProps(['spots', 'selectedSpot', 'isPickingLocation']);
-const emit = defineEmits(['marker-click', 'map-click', 'close-details', 'edit-spot', 'delete-spot']); // Added 'map-click'
+const emit = defineEmits(['marker-click', 'map-click', 'close-details', 'edit-spot', 'delete-spot', 'view-profile']);
 
 const auth = useAuth();
 const zoom = ref(13);
@@ -99,6 +99,13 @@ onBeforeUnmount(() => {
       <div class="overlay-content">
         <button class="close-btn" @click="$emit('close-details')">✕</button>
         <h2>{{ selectedSpot.name }}</h2>
+        <br>
+        <p 
+           class="created-by" 
+           @click="$emit('view-profile', selectedSpot.creator_username)"
+        >
+          Created by: <strong>@{{ selectedSpot.creator_username || 'Unknown' }}</strong>
+        </p>
         <span class="badge">{{ selectedSpot.spot_type }}</span>
         <p>{{ selectedSpot.description }}</p>
         
@@ -150,6 +157,22 @@ onBeforeUnmount(() => {
   z-index: 1000;
   box-shadow: 0 10px 30px rgba(0,0,0,0.5);
   color: white;
+}
+
+.created-by {
+  font-size: 0.8rem;
+  color: #888;
+  margin-top: -5px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.created-by:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.created-by strong {
+  color: #ccc;
 }
 
 /* ... Rest of your styles remain exactly the same ... */

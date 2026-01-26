@@ -20,8 +20,11 @@ const showAuthModal = ref(false);
 const isPickingLocation = ref(false);
 const newSpotLocation = ref(null);
 
+// --- FIX: Reference to Sidebar Component ---
+const sidebarRef = ref(null);
+
 const handleSelectSpot = async (spot) => {
-  if (isPickingLocation.value) return; // Don't select spots while picking location
+  if (isPickingLocation.value) return; 
   selectedSpot.value = spot;
   const fullDetails = await getSpotDetails(spot.id);
   if (fullDetails) {
@@ -47,16 +50,14 @@ const handleEdit = (spot) => {
 
 // --- NEW FLOW: Add Spot ---
 const startAddSpot = () => {
-  // 1. Enter Picking Mode
   isPickingLocation.value = true;
-  selectedSpot.value = null; // Close any open details
+  selectedSpot.value = null; 
 };
 
 const handleMapClick = (latlng) => {
   if (isPickingLocation.value) {
-    // 2. Capture Location & Open Form
     newSpotLocation.value = latlng;
-    isPickingLocation.value = false; // Exit mode
+    isPickingLocation.value = false; 
     showAddModal.value = true;
   }
 };
@@ -71,6 +72,14 @@ const closeAddModal = () => {
   newSpotLocation.value = null;
 };
 
+// --- FIX: Handler for Map "Created By" Click ---
+const handleViewProfileFromMap = (username) => {
+  if (sidebarRef.value && username) {
+    // Call the exposed function on the sidebar component
+    sidebarRef.value.enterProfileMode({ username: username });
+  }
+};
+
 onMounted(async () => {
   auth.checkAuth();
   await getAllSpots(); 
@@ -80,6 +89,7 @@ onMounted(async () => {
 <template>
   <div class="app-container">
     <SpotSidebar 
+      ref="sidebarRef"
       :spots="spots" 
       @select-spot="handleSelectSpot"
       @open-add="startAddSpot"
@@ -101,6 +111,7 @@ onMounted(async () => {
         @close-details="selectedSpot = null"
         @delete-spot="handleDelete"
         @edit-spot="handleEdit"
+        @view-profile="handleViewProfileFromMap" 
       />
     </main>
 

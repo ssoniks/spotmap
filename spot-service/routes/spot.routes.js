@@ -4,6 +4,24 @@ const authMiddleware = require("../middleware/auth.middleware");
 const axios = require("axios");
 
 const router = express.Router();
+const amqp = require("amqplib");
+
+async function sendNotification(userId, message, type) {
+  try {
+    const connection = await amqp.connect("amqp://localhost");
+    const channel = await connection.createChannel();
+    const queue = "notifications";
+    await channel.assertQueue(queue, { durable: true });
+
+    const payload = JSON.stringify({ userId, message, type });
+    channel.sendToQueue(queue, Buffer.from(payload));
+
+    console.log(`[RabbitMQ] Sent notification to user ${userId}`);
+    setTimeout(() => connection.close(), 500);
+  } catch (err) {
+    console.error("[RabbitMQ] Failed to send message:", err);
+  }
+}
 
 /**
  * GET /spots
@@ -95,7 +113,7 @@ router.post("/", authMiddleware, async (req, res) => {
         userId: userId,
         amount: 50 // Points for creating a spot
       });
-
+      sendNotification(userId, `You earned 50 points for adding '${name}'!`, 'reward');
       console.log(`[Gamification] Awarded 50 points to user ${userId}`);
     } catch (rewardErr) {
       // If the reward fails, we log it but DON'T fail the request. 

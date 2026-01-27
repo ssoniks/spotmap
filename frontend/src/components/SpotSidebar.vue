@@ -5,6 +5,9 @@
       <h1 class="brand-title">SpotFinder<span class="dot">.</span></h1>
       
       <div v-if="auth.isAuthenticated.value" class="user-badge">
+        
+        <NotificationBell />
+
         <div class="user-details">
           <span class="username clickable" @click="enterProfileMode(auth.user.value)">
             @{{ auth.user.value?.username }}
@@ -94,6 +97,7 @@
 import { ref, computed } from 'vue';
 import axios from 'axios'; // Import Axios
 import { useAuth } from '../composables/useAuth';
+import NotificationBell from './NotificationBell.vue';
 
 const props = defineProps(['spots']);
 const emit = defineEmits(['select-spot', 'open-add', 'open-auth']);
@@ -232,7 +236,7 @@ const filteredSpots = computed(() => {
 .brand-title { font-size: 1.5rem; font-weight: 900; letter-spacing: -1px; color: white; }
 .brand-title .dot { color: var(--accent); }
 
-.user-badge { text-align: right; }
+.user-badge { text-align: right; display: flex; align-items: center; }
 .username { display: block; font-size: 0.85rem; font-weight: 600; color: #fff; margin-bottom: 4px; }
 .username.clickable { cursor: pointer; text-decoration: underline; text-decoration-color: transparent; transition: all 0.2s; }
 .username.clickable:hover { color: var(--accent); text-decoration-color: var(--accent); }
